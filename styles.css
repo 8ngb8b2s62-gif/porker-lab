@@ -96,3 +96,9 @@
  #screen-play .action-panel{max-height:49dvh}
  #screen-play .seat{min-width:42px}
 }
+
+/* v0.5.2 readability pass: cards and current decision first. */
+#screen-play .compact-history{padding:10px 13px}#screen-play .compact-history summary{cursor:pointer;font-weight:750;display:flex;justify-content:space-between}#screen-play .compact-history .action-history{margin-top:10px}
+#screen-play .hero-bar{border-color:#4edab3;background:#15312f}#screen-play .hero-cards .playing-card{width:56px;height:76px;font-size:29px;border-radius:8px}#screen-play .hero-cards .playing-card .suit{font-size:21px}#screen-play #heroMeta{font-size:12px;font-weight:850;color:#d8f9eb}
+#screen-play .action-panel .hint-bar{display:none}#screen-play .action-panel{border-color:#356b61}
+@media(max-width:600px){#screen-play .hero-bar{padding:5px 12px;min-height:82px;margin:3px auto 6px}#screen-play .hero-cards .playing-card{width:54px;height:70px;font-size:28px}#screen-play .hero-cards .playing-card .suit{font-size:20px}#screen-play .poker-table{height:clamp(166px,calc(100dvh - 530px),230px)}#screen-play .felt-logo{display:none}#screen-play .action-panel{max-height:none;overflow:visible;padding:10px;margin-bottom:8px}#screen-play .action-row{margin:7px 0}#screen-play .action-row .btn{min-height:46px}#screen-play .size-presets{margin:6px 0}#screen-play .raise-controls{padding-top:7px}#screen-play .table-head{margin:6px 3px 4px}#screen-play .center-mat{top:47%}#screen-play .board .playing-card{width:clamp(29px,8vw,39px);height:clamp(40px,11vw,54px);font-size:21px}#screen-play .board .playing-card .suit{font-size:14px}#screen-play .pot-display{font-size:19px}#screen-play .pot-label{font-size:8px}#screen-play .board{min-height:44px;margin:2px auto}#screen-play .action-panel h2{font-size:14px}#screen-play .hero-right strong{font-size:18px}}
