@@ -1,0 +1,94 @@
+/* POKER LAB v1.0.2 — 6-max live table and restrained portrait layout */
+#screen-play[hidden]{display:none!important}
+#screen-play .live-action{display:inline-block;margin:3px auto 0;border-radius:99px;padding:3px 10px;background:#071c2ac7;border:1px solid #386c77;color:#a7e6db;font-size:10px;font-weight:850;letter-spacing:.8px}
+#screen-play .seat-top{display:flex;gap:4px;justify-content:center;align-items:center}
+#screen-play .dealer-chip{display:inline-grid;place-items:center;flex:none;border-radius:50%;background:#faeac2;color:#202931;border:1px solid #af9045;font-size:8px;font-weight:950;width:15px;height:15px}
+#screen-play .opponent-cards{display:flex;justify-content:center;align-items:center;gap:2px;margin:3px 0 2px;height:29px}
+#screen-play .mini-card{display:grid;place-items:center;width:20px;height:28px;border-radius:3px;background:repeating-linear-gradient(45deg,#275788 0 3px,#173c69 3px 6px);border:1px solid #daeefa;box-shadow:inset 0 0 0 2px #224878,0 1px 4px #0008;color:#d8f5ff;font-size:12px}
+#screen-play .opponent-cards .playing-card{width:20px;height:28px;border-radius:3px;font-size:12px;line-height:.9}
+#screen-play .opponent-cards .playing-card .suit{font-size:9px;margin:0}
+#screen-play .seat.hero .seat-action{color:#91e7c8}
+#screen-play .seat.turn{border-color:#69f6c9;box-shadow:0 0 0 2px #4ef3b480,0 0 22px #30ba9c80;animation:player-glow 1.2s ease-in-out infinite alternate}
+#screen-play .seat.allined .seat-action{color:#ffac9e}
+#screen-play .seat.folded .opponent-cards{opacity:.25}
+#screen-play .seat-action{min-height:10px;overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
+#screen-play .ai-waiting{font-size:12px;padding:10px 2px;color:#7fddc3;animation:player-glow 1.15s ease-in-out infinite alternate}
+@keyframes player-glow{from{filter:brightness(.94)}to{filter:brightness(1.25)}}
+@media(max-width:700px){
+ html,body{overscroll-behavior-y:contain}
+ body:has(#screen-play:not([hidden])){overflow-x:hidden}
+ body:has(#screen-play:not([hidden])) .app-header{height:41px;padding:3px 12px}
+ body:has(#screen-play:not([hidden])) .brand-symbol{width:29px;height:29px;font-size:20px;border-radius:8px}
+ body:has(#screen-play:not([hidden])) .brand strong{font-size:16px}
+ body:has(#screen-play:not([hidden])) .navbar{height:41px;padding:2px 6px 3px;gap:4px}
+ body:has(#screen-play:not([hidden])) .navbar button{font-size:10px;min-height:33px;padding:4px 1px}
+ body:has(#screen-play:not([hidden])) .layout{padding:2px 7px 5px}
+ #screen-play:not([hidden]){display:grid!important;grid-template-rows:auto auto minmax(222px,1fr) auto auto;gap:3px;height:calc(100dvh - 91px);min-height:510px;overflow:visible;padding:0 1px}
+ #screen-play .config-panel{margin:0;min-height:29px;padding:5px 10px;border-radius:10px}
+ #screen-play .config-panel summary{font-size:11px}
+ #screen-play .table-head{min-height:28px;margin:0 2px;gap:4px}
+ #screen-play .table-head strong{font-size:12px}
+ #screen-play .table-head small{font-size:9px}
+ #screen-play .street-pills{gap:2px}
+ #screen-play .street-pills span{font-size:8px;padding:2px 3px}
+ #screen-play .session-status{font-size:8px;line-height:1.2}
+ #screen-play .felt-wrap{height:100%!important;min-height:0;max-height:none;display:flex;align-items:center;justify-content:center;padding:0!important;overflow:visible}
+ #screen-play .poker-table{width:min(77vw,335px)!important;height:calc(100% - 77px)!important;max-height:308px!important;min-height:177px!important;flex:none;border:7px solid #455769;border-radius:48% / 45%;background:radial-gradient(ellipse at 50% 45%,#146151 0%,#0b493f 70%,#07342e 100%);box-shadow:0 0 0 5px #192630,0 12px 35px #0009,inset 0 0 0 3px #104a3f,inset 0 0 28px #001c18}
+ #screen-play .seat{min-width:64px!important;max-width:73px!important;width:68px!important;padding:3px 2px 4px!important;line-height:1.08!important;border-radius:9px!important;box-shadow:0 3px 10px #0008}
+ #screen-play .seat.hero{min-height:38px!important;max-height:60px!important}
+ #screen-play .seat-top{min-height:12px}
+ #screen-play .seat-name{font-size:10px!important;line-height:1.1}
+ #screen-play .seat-position{font-size:9px!important;color:#b0cad7}
+ #screen-play .seat-stack{font-size:10px!important;font-weight:800}
+ #screen-play .seat-action{font-size:8px!important;max-width:68px!important}
+ #screen-play .opponent-cards{height:28px;margin:2px 0 1px}
+ #screen-play .seat-bet{font-size:9px!important;top:calc(100% + 3px);padding:2px 5px;background:#1f2a2f;border-color:#ad9c68}
+ #screen-play .center-mat{top:46%;width:90%}
+ #screen-play .pot-label{font-size:8px;line-height:1;letter-spacing:1px}
+ #screen-play .pot-display{font-size:18px;line-height:1.1;margin-top:1px}
+ #screen-play .board{gap:3px;min-height:38px;margin:3px auto 0}
+ #screen-play .board .playing-card{width:clamp(25px,7.5vw,34px);height:clamp(35px,10vw,47px);font-size:18px;border-radius:4px}
+ #screen-play .board .playing-card .suit{font-size:12px}
+ #screen-play .board .playing-card.placeholder{opacity:.32}
+ #screen-play .live-action{font-size:8px;line-height:1.2;padding:3px 7px}
+ #screen-play .felt-logo{display:none!important}
+ #screen-play .hero-bar{width:100%;max-width:none;min-height:87px!important;max-height:94px!important;padding:5px 13px!important;margin:0!important;border-radius:11px;background:#122732;display:flex;align-items:center;justify-content:space-between}
+ #screen-play #heroMeta{font-size:11px!important}
+ #screen-play .hero-cards{margin-top:4px;gap:4px}
+ #screen-play .hero-cards .playing-card{height:58px!important;width:43px!important;font-size:25px!important}
+ #screen-play .hero-cards .playing-card .suit{font-size:18px!important}
+ #screen-play .hero-right strong{font-size:20px!important}
+ #screen-play .hero-right small{font-size:10px}
+ #screen-play .action-panel{width:100%;max-width:none;position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;flex:none;min-height:133px!important;max-height:none!important;overflow:visible!important;padding:10px 11px 8px!important;margin:0!important;border-radius:11px!important;box-shadow:none;z-index:10}
+ #screen-play .action-panel h2{font-size:13px;margin:2px 0}
+ #screen-play #potOddsLabel{font-size:9px;padding:3px 6px}
+ #screen-play .action-row{display:flex;gap:7px;margin:7px 0 6px;min-height:43px}
+ #screen-play .action-row .btn{flex:1;min-height:43px;font-size:14px;padding:7px 4px}
+ #screen-play .raise-toggle{display:block;min-height:39px;width:100%;font-size:13px;padding:7px;background:#b35c55;border:1px solid #c87973}
+ #screen-play .raise-controls{display:none!important}
+ #screen-play .action-panel.raise-open .raise-controls{display:block!important;position:absolute;bottom:calc(100% + 4px);left:0;right:0;z-index:50;background:#152637;border:1px solid #4b7b83;border-radius:12px;padding:10px;box-shadow:0 -8px 30px #000c;max-height:55dvh;overflow:auto}
+ #screen-play .action-panel.raise-open .raise-controls .size-presets{grid-template-columns:repeat(3,1fr)}
+ #screen-play .compact-history{display:none}
+ #screen-play #reviewPanel:not([hidden]){display:block;max-height:43dvh;overflow:auto;padding:12px;margin:0}
+ #screen-play:has(#reviewPanel:not([hidden])){grid-template-rows:auto auto minmax(190px,1fr) auto auto}
+ #screen-play .action-panel .hint-bar{display:none}
+ .footer{display:none}
+}
+@media(max-width:700px) and (max-height:730px){
+ #screen-play:not([hidden]){height:calc(100dvh - 87px);gap:2px;grid-template-rows:auto auto minmax(180px,1fr) auto auto;min-height:425px}
+ #screen-play .poker-table{min-height:161px!important}
+ #screen-play .hero-bar{min-height:72px!important;max-height:80px!important}
+ #screen-play .hero-cards .playing-card{height:48px!important;width:36px!important;font-size:22px!important}
+ #screen-play .action-panel{min-height:122px!important;padding:7px 9px!important}
+ #screen-play .raise-toggle{min-height:35px}
+}
+/* Expanding settings intentionally switches from fixed live view to scrollable setup mode. */
+@media(max-width:700px){
+ #screen-play:has(#advancedSettings[open]){display:block!important;height:auto!important;min-height:100dvh!important;overflow:visible!important}
+ #screen-play:has(#advancedSettings[open]) .config-panel{position:relative;z-index:15;margin-bottom:8px!important}
+ #screen-play:has(#advancedSettings[open]) .table-head{margin:12px 3px 5px}
+ #screen-play:has(#advancedSettings[open]) .felt-wrap{height:370px!important;min-height:370px!important}
+ #screen-play:has(#advancedSettings[open]) .hero-bar{margin:7px 0!important}
+ #screen-play:has(#advancedSettings[open]) .action-panel{margin-bottom:10px!important}
+ #screen-play .raise-toggle[hidden],#screen-play .raise-controls[hidden]{display:none!important}
+}

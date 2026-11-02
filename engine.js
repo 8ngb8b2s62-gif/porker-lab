@@ -35,8 +35,33 @@ export function estimateEquity(hole,board,opponents=1,trials=32){
  }
  return wins/trials;
 }
+
+// Human-readable 6-max baseline ranges. Coaching heuristics, NOT solver GTO.
+const PREF_RANKS='23456789TJQKA';
+const OPEN_6={
+ UTG:'66+ A5s A4s ATs+ KTs+ QTs+ JTs T9s AJo+ KQo',
+ HJ:'55+ A2s-A5s A8s+ K9s+ Q9s+ J9s+ T9s 98s ATo+ KJo+',
+ CO:'33+ A2s+ K7s+ Q8s+ J8s+ T8s+ 97s 86s 76s 65s A8o+ KTo+ QTo+ JTo',
+ BTN:'22+ A2s+ K2s+ Q5s+ J6s+ T6s+ 96s+ 85s+ 75s+ 64s+ 54s A2o+ K8o+ Q9o+ J9o+ T9o',
+ SB:'22+ A2s+ K5s+ Q7s+ J7s+ T7s+ 97s+ 86s+ 75s+ 64s+ 54s A2o+ K9o+ Q9o+ JTo',
+ BB:'22+ A2s+ K2s+ Q2s+ J2s+ T2s+ 92s+ 82s+ 72s+ 62s+ 52s+ A2o+ K2o+ Q2o+ J2o+ T2o+'
+};
+const DEFEND_6={
+ early:'88+ AQs+ AKo KQs QJs JTs',
+ mid:'66+ AJs+ AQo+ KJs+ KQo QJs JTs T9s 98s',
+ late:'55+ A9s+ AJo+ KTs+ KQo QTs+ JTs T9s 98s 87s',
+ blind:'22+ A2s+ A7o+ K7s+ KTo+ Q8s+ QTo+ J8s+ JTo T8s+ 98s 87s 76s 65s 54s'
+};
+function codeOf(hole){let a=hole[0][0],b=hole[1][0];if(a===b)return a+a;return PREF_RANKS.indexOf(a)>PREF_RANKS.indexOf(b)? a+b+(hole[0][1]===hole[1][1]?'s':'o'):b+a+(hole[0][1]===hole[1][1]?'s':'o');}
+function tokenMatches(hand,t){
+ if(t.includes('-')){let [first,last]=t.split('-');if(first.length!==3||last.length!==3||hand.length!==3||first[0]!==last[0]||first[0]!==hand[0]||first[2]!==last[2]||hand[2]!==first[2])return false;let v=PREF_RANKS.indexOf(hand[1]),lo=PREF_RANKS.indexOf(first[1]),hi=PREF_RANKS.indexOf(last[1]);return v>=Math.min(lo,hi)&&v<=Math.max(lo,hi);}
+ if(t.endsWith('+')){let base=t.slice(0,-1);if(base.length===2)return hand.length===2&&PREF_RANKS.indexOf(hand[0])>=PREF_RANKS.indexOf(base[0]);if(base.length===3&&hand.length===3)return hand[0]===base[0]&&hand[2]===base[2]&&PREF_RANKS.indexOf(hand[1])>=PREF_RANKS.indexOf(base[1]);}
+ return hand===t;
+}
+function inRange(hand,range){return range.split(/\s+/).some(t=>tokenMatches(hand,t));}
+function preflopPosition(pos){return pos==='BTN/SB'?'SB':pos==='LJ'||pos==='UTG+1'||pos==='MP'?'UTG':pos;}
 export class PokerEngine{
- constructor({players=9,mode='MTT',stackBB=40,bb=100,ante='bba',heroPosition='BTN',aiMode='human',adaptive=true,profiles=[],heroMemory=null,forcedHero=null,forcedBoard=null,blindHands=10,level=0}={}){
+ constructor({players=6,mode='MTT',stackBB=40,bb=100,ante='bba',heroPosition='BTN',aiMode='human',adaptive=true,profiles=[],heroMemory=null,forcedHero=null,forcedBoard=null,blindHands=10,level=0}={}){
   this.mode=mode;this.aiMode=aiMode;this.adaptive=adaptive;this.bb=Math.max(2,Math.round(bb));this.sb=Math.floor(this.bb/2);this.ante=ante;this.level=level;this.handNo=0;this.heroMemory=heroMemory||{hands:0,open:0,raises:0,calls:0,folds:0,bets:0,postActions:0};this.settings={forcedHero,forcedBoard,heroPosition,blindHands};this.log=[];this.decisions=[];this.history=[];this.complete=false;this.result=null;this.street=0;this.board=[];this.displayBoard=[];this.presetBoard=[];
   let n=Math.max(2,Math.min(9,players));this.players=Array.from({length:n},(_,i)=>({id:i,name:i===0?'YOU':`AI ${i}`,stack:Math.round(stackBB*this.bb),hole:[],bet:0,committed:0,folded:false,allIn:false,needsAction:false,actedSinceFullRaise:false,aiProfile:profiles[i]||['TAG','LAG','Station','Nit','Tricky','TAG','LAG','Station'][Math.max(0,i-1)%8]}));
   this.button=this.buttonForHero(heroPosition);this.startHand({forcedHero,forcedBoard});
@@ -70,14 +95,14 @@ export class PokerEngine{
  canAct(){return this.players.filter(p=>!p.folded&&!p.allIn&&p.hole.length===2)}
  legal(idx=this.turn){let p=this.players[idx];if(!p||p.folded||p.allIn)return null;let toCall=Math.max(0,this.currentBet-p.bet),maxTo=p.bet+p.stack,minTo=this.currentBet===0?this.bb:this.currentBet+this.lastRaise;let raiseAllowed=!p.actedSinceFullRaise&&maxTo>this.currentBet;return {toCall,canCheck:toCall===0,canFold:toCall>0,canCall:toCall>0,callAmount:Math.min(p.stack,toCall),canRaise:raiseAllowed,minRaiseTo:Math.min(minTo,maxTo),minimumFullRaiseTo:minTo,maxRaiseTo:maxTo,pot:this.pot(),stack:p.stack};}
  acting(){return this.turn>=0?this.players[this.turn]:null}
- act(idx,type,amount){if(this.complete||this.turn!==idx)throw Error('今はそのプレイヤーの番ではありません');let p=this.players[idx],leg=this.legal(idx);if(!leg)throw Error('行動できません');let before=this.pot(),paid=0,label='';
+ act(idx,type,amount){if(this.complete||this.turn!==idx)throw Error('今はそのプレイヤーの番ではありません');let p=this.players[idx],leg=this.legal(idx);if(!leg)throw Error('行動できません');let before=this.pot(),wasUnopened=this.currentBet===0,paid=0,label='';
   if(type==='fold'){if(!leg.canFold)throw Error('チェックできる場面です');p.folded=true;p.needsAction=false;label='FOLD';}
   else if(type==='check'){if(!leg.canCheck)throw Error('チェック不可');p.needsAction=false;label='CHECK';}
   else if(type==='call'){if(!leg.canCall)throw Error('コール不可');paid=this.post(p,leg.toCall,true);p.needsAction=false;label=`CALL ${(paid/this.bb).toFixed(1)}BB`;}
   else if(type==='raise'||type==='allin'){
    if(!leg.canRaise){if(type==='allin'&&leg.toCall>=p.stack)return this.act(idx,'call');throw Error('レイズ不可');}
    let total=type==='allin'?leg.maxRaiseTo:Math.round(amount);if(!Number.isFinite(total)||total<=this.currentBet||total>leg.maxRaiseTo)throw Error('ベット額が不正です');if(total<leg.minimumFullRaiseTo&&total!==leg.maxRaiseTo)throw Error('最小レイズ額を下回っています');
-   let increase=total-this.currentBet,full=increase>=this.lastRaise;paid=this.post(p,total-p.bet,true);this.currentBet=p.bet;if(full){this.lastRaise=increase;this.players.forEach(q=>{if(q!==p&&!q.folded&&!q.allIn)q.actedSinceFullRaise=false;})}this.players.forEach(q=>{if(q!==p&&!q.folded&&!q.allIn&&q.bet<this.currentBet)q.needsAction=true});p.needsAction=false;this.lastAggressor=idx;label=type==='allin'||p.allIn?`ALL-IN ${(p.bet/this.bb).toFixed(1)}BB`:(before===0?`BET ${(p.bet/this.bb).toFixed(1)}BB`:`RAISE ${(p.bet/this.bb).toFixed(1)}BB`);
+   let increase=total-this.currentBet,full=increase>=this.lastRaise;paid=this.post(p,total-p.bet,true);this.currentBet=p.bet;if(full){this.lastRaise=increase;this.players.forEach(q=>{if(q!==p&&!q.folded&&!q.allIn)q.actedSinceFullRaise=false;})}this.players.forEach(q=>{if(q!==p&&!q.folded&&!q.allIn&&q.bet<this.currentBet)q.needsAction=true});p.needsAction=false;this.lastAggressor=idx;label=type==='allin'||p.allIn?`ALL-IN ${(p.bet/this.bb).toFixed(1)}BB`:(wasUnopened?`BET ${(p.bet/this.bb).toFixed(1)}BB`:`RAISE ${(p.bet/this.bb).toFixed(1)}BB`);
   }else throw Error('行動が不正');
   p.actedSinceFullRaise=true;this.log.push({street:this.street,player:idx,text:`${p.name} · ${label}`,type,amount:paid,pot:this.pot()});
   if(idx===0){let decision={street:this.street,board:this.board.slice(),hole:p.hole.slice(),position:this.posOf(0),potBefore:before,toCall:leg.toCall,minimum:leg.minimumFullRaiseTo,action:type,amount:paid,betTotal:p.bet,stackBefore:p.stack+paid,bb:this.bb,tableSize:this.liveOrder().length,handNo:this.handNo,mode:this.mode,aiMode:this.aiMode};this.decisions.push(decision);}
@@ -98,17 +123,78 @@ export class PokerEngine{
   this.complete=true;let winners=Object.keys(payouts).filter(k=>payouts[k]>0).map(Number);this.result={type:'showdown',pot:this.pot(),winners,payouts,ranks,slices,description:winners.map(id=>`${this.players[id].name} +${(payouts[id]/this.bb).toFixed(1)}BB`).join(' / ')};this.log.push({street:3,text:`SHOWDOWN · ${this.result.description}`,type:'result'});
  }
  getHeroMemory(){let m={...this.heroMemory},pre=this.decisions.filter(d=>d.street===0);m.hands++;if(pre.some(d=>['call','raise','allin'].includes(d.action)))m.open++;if(pre.some(d=>['raise','allin'].includes(d.action)))m.raises++;this.decisions.forEach(d=>{if(d.action==='call')m.calls++;if(d.action==='fold')m.folds++;if(d.action==='raise'||d.action==='allin')m.bets++;if(d.street>0)m.postActions++});return m;}
- aiDecision(idx){let p=this.players[idx],leg=this.legal(idx);if(!leg)return null;let profile=p.aiProfile;let traits={TAG:{wide:0,aggr:0.12,station:0},LAG:{wide:.095,aggr:.30,station:.03},Station:{wide:.13,aggr:-.18,station:.2},Nit:{wide:-.13,aggr:-.11,station:-.06},Maniac:{wide:.22,aggr:.46,station:.06},Tricky:{wide:.04,aggr:.16,station:.08}}[profile]||{wide:0,aggr:.05,station:0};let aggressive=traits.aggr;
-  if(this.aiMode==='gto'){traits={wide:0,aggr:.1,station:0};aggressive=.1;}
-  let observed=this.heroMemory.hands,confidence=this.adaptive?Math.min(.62,observed/(observed+20)):0;if(this.aiMode==='human'&&confidence){let vpip=this.heroMemory.open/Math.max(1,observed);aggressive+=confidence*(vpip-.30)*.6;}
-  let strength=this.street===0?handClass(p.hole):estimateEquity(p.hole,this.board,Math.max(1,Math.min(3,this.inHand().length-1)),this.street===3?24:16);
-  let pos=this.posOf(idx),early=['UTG','UTG+1','MP','LJ'].includes(pos),late=['CO','BTN','SB','BTN/SB'].includes(pos);
-  if(this.street===0){strength+=traits.wide+(late?.03:early?-.06:0);}
-  let callOdds=leg.toCall/(this.pot()+leg.toCall||1);let commitment=leg.toCall/this.bb;let pressure=this.street===0?(.05+Math.max(0,commitment-2)*.038):.06;let foldBound=Math.max(.16,callOdds+pressure-traits.station);
-  if(leg.toCall===0){if(leg.canRaise&&strength+(Math.random()-.5)*.20 > (this.street===0?(.54-aggressive*.18):(.62-aggressive*.17))){let desired=this.street===0?Math.max(this.bb*2.2,this.currentBet+this.bb):Math.max(this.bb,this.pot()*(.33+Math.random()*.55));let total=Math.max(leg.minimumFullRaiseTo,Math.round((this.street===0?desired:desired+p.bet)/this.bb*10)*this.bb/10);if(total>=leg.maxRaiseTo)return {type:'allin'};return {type:'raise',amount:total};}return {type:'check'};}
-  if(strength+(Math.random()-.5)*.24 < foldBound&&leg.canFold)return {type:'fold'};
-  let raiseThreshold=Math.min(.93,.74-aggressive*.20+callOdds*.4);
-  if(leg.canRaise&&strength+Math.random()*.14>raiseThreshold){let full=leg.minimumFullRaiseTo,large=this.currentBet+Math.max(this.lastRaise,Math.round(this.pot()*.45));let target=Math.max(full,large);if(target>=leg.maxRaiseTo)return {type:'allin'};return {type:'raise',amount:target};}
+ aiDecision(idx){
+  const p=this.players[idx],L=this.legal(idx);if(!L)return null;
+  const pos=preflopPosition(this.posOf(idx)),hand=codeOf(p.hole),stack=p.stack/this.bb;
+  const opponents=Math.max(1,this.inHand().length-1);
+  const raised=this.log.filter(a=>a.street===0&&(a.type==='raise'||a.type==='allin')).length;
+  const opponentOpening=this.log.filter(a=>a.street===0&&(a.type==='raise'||a.type==='allin')).at(-1);
+  const opener=opponentOpening?preflopPosition(this.posOf(opponentOpening.player)):'UTG';
+  const rand=Math.random();
+  const makeRaise=(target)=>({type:'raise',amount:Math.min(L.maxRaiseTo,Math.max(L.minimumFullRaiseTo,Math.round(target)))});
+  const fullRaiseAvailable=L.canRaise && L.maxRaiseTo>=L.minimumFullRaiseTo;
+  if(this.street===0){
+   // Unopened pots: open-raise or fold; never open-limp. BB gets a free check.
+   if(raised===0){
+    if(L.toCall===0&&this.currentBet===this.bb)return {type:'check'};
+    const openRange=OPEN_6[pos]||OPEN_6.UTG;
+    let opened=inRange(hand,openRange);
+    // Narrow short-stack RFI; wide recreational deviations are intentionally small.
+    if(stack<=14&&['UTG','HJ'].includes(pos))opened=opened&&inRange(hand,'44+ A7s+ ATo+ KTs+ KQo QJs JTs');
+    if(!opened)return L.canCheck?{type:'check'}:{type:'fold'};
+    if(stack<=11&&pos!=='BB')return {type:'allin'};
+    if(!L.canRaise)return L.canCheck?{type:'check'}:{type:'call'};
+    return makeRaise(this.bb*(pos==='SB'?2.5:this.mode==='CASH'?2.5:2.2));
+   }
+   // Under a raise: progressively stricter responses to 3bets and 4bets.
+   const effective=(p.stack+p.bet)/this.bb;
+   const premium=inRange(hand,'QQ+ AKs AKo');
+   const monster=inRange(hand,'KK+');
+   if(raised>=3){if(monster&&L.canRaise&&effective<=70)return {type:'allin'};return (monster||hand==='QQ'||hand==='AKs')&&L.toCall<=p.stack*.42?{type:'call'}:{type:'fold'};}
+   if(raised===2){
+    if(monster&&L.canRaise){if(effective<=65)return {type:'allin'};return makeRaise(this.currentBet*2.2);}
+    if(inRange(hand,'JJ+ AKs AKo AQs')&&L.toCall<=p.stack*(effective<=40?.65:.26))return {type:'call'};
+    return {type:'fold'};
+   }
+   const openerEarly=['UTG','HJ'].includes(opener);
+   const defenderRange=pos==='BB'&&!openerEarly?DEFEND_6.blind:DEFEND_6[openerEarly?'early':opener==='CO'?'mid':'late'];
+   const viable=inRange(hand,defenderRange);
+   const costBB=L.toCall/this.bb;
+   const triple=this.inHand().filter(q=>q.id!==idx&&!q.folded&&q.bet>=this.bb*1.8).length>1;
+   const veryStrong=inRange(hand,openerEarly?'QQ+ AKs AKo':'JJ+ AKs AKo AQs');
+   const threebetBluff=this.aiMode!=='gto'&&inRange(hand,'A5s A4s KTs QTs JTs') && !triple && ['CO','BTN','SB','BB'].includes(pos) && !openerEarly && rand<.15;
+   if(L.canRaise&&(veryStrong||threebetBluff) && rand<(veryStrong?.80:1)){
+    if(effective<=17&&veryStrong)return {type:'allin'};
+    if(fullRaiseAvailable){const target=this.currentBet*(pos==='SB'||pos==='BB'?4.0:3.2)+(triple?this.bb:0);return makeRaise(target);}
+   }
+   if(viable&&costBB<=Math.max(1,effective*.22)&&(!triple||premium||inRange(hand,'77+ AJs+ KQs QJs JTs T9s')))return {type:'call'};
+   // Cheap BB defend, but not any-two versus an arbitrarily large raise.
+   if(pos==='BB'&&costBB<=1.5&&inRange(hand,OPEN_6.BTN))return {type:'call'};
+   return L.canCheck?{type:'check'}:{type:'fold'};
+  }
+  // Postflop: conservative multiway play, realistic fractions, less random huge aggression.
+  let equity=estimateEquity(p.hole,this.board,Math.min(3,opponents),this.street===3?40:28);
+  const boardRanks=this.board.map(c=>value(c)),holeRanks=p.hole.map(c=>value(c));
+  const paired=holeRanks[0]===holeRanks[1]||holeRanks.some(r=>boardRanks.includes(r));
+  const overpair=holeRanks[0]===holeRanks[1]&&holeRanks[0]>Math.max(...boardRanks);
+  const topPair=holeRanks.some(r=>r===Math.max(...boardRanks));
+  const strong=(topPair||overpair||equity>(opponents>1?.66:.69));
+  const multi=opponents>1;
+  if(L.toCall===0){
+   if(!L.canRaise)return {type:'check'};
+   const chance=(strong?(multi?.34:.62):(paired?(multi?.10:.25):(multi?.02:.12)))*(this.aiMode==='gto'?.75:1);
+   if(rand>=chance)return {type:'check'};
+   let sizing=(strong?.55:.33)*this.pot();
+   if(multi)sizing*=.78;
+   if(L.maxRaiseTo<=this.bb*2&&strong)return {type:'allin'};
+   return makeRaise(this.currentBet+Math.max(this.bb,sizing));
+  }
+  const odds=L.toCall/(this.pot()+L.toCall);
+  const risk=(multi?.095:.045)+(L.toCall>p.stack*.40?.065:0);
+  if(equity+ (paired?.015:0) < odds+risk && !overpair)return {type:'fold'};
+  if(L.canRaise&&strong&&!multi&&equity>.76&&rand<.16&&L.toCall<p.stack*.2){
+   if(fullRaiseAvailable)return makeRaise(this.currentBet+Math.max(this.lastRaise,this.pot()*.65));
+  }
   return {type:'call'};
  }
  autoUntilHero(max=250){let loop=0;while(!this.complete&&this.turn!==0&&loop++<max){if(this.turn<0){this.advanceIfNecessary();continue}let a=this.aiDecision(this.turn),id=this.turn;try{this.act(id,a.type,a.amount)}catch(e){let leg=this.legal(id);this.act(id,leg?.canCheck?'check':'call')}}if(loop>=max)throw Error('Auto action exceeded safe limit');}

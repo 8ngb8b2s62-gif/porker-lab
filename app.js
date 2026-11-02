@@ -1,5 +1,5 @@
-import {PokerEngine,STREET_NAMES,formatHand,HAND_NAMES,eval7,icmEquities,icmBubbleFactor,randomInt} from './engine.js?v=100';
-import {ROW_RANKS,SPOT_LABELS,handAt,holeToLabel,keyForRange,roughRangeClass,explainHand,exampleSchema,validateImportedSpot} from './ranges.js?v=100';
+import {PokerEngine,STREET_NAMES,formatHand,HAND_NAMES,eval7,icmEquities,icmBubbleFactor,randomInt} from './engine.js?v=102';
+import {ROW_RANKS,SPOT_LABELS,handAt,holeToLabel,keyForRange,roughRangeClass,explainHand,exampleSchema,validateImportedSpot} from './ranges.js?v=102';
 
 const $=id=>document.getElementById(id),num=(x,d=0)=>Number.isFinite(Number(x))?Number(x):d;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -11,6 +11,21 @@ let store={history:[],solvers:{},quiz:{right:0,total:0}};
 try{let saved=JSON.parse(localStorage.getItem(STORE)||'null');if(saved&&typeof saved==='object'){store={history:Array.isArray(saved.history)?saved.history:[],solvers:saved.solvers&&typeof saved.solvers==='object'?saved.solvers:{},quiz:saved.quiz&&typeof saved.quiz==='object'?saved.quiz:{right:0,total:0}}}}catch(e){console.warn('Storage not accessible',e)}
 function save(){try{localStorage.setItem(STORE,JSON.stringify(store))}catch(e){toast('端末への保存ができませんでした。空き容量や設定を確認してください。')}}
 let raiseExpanded=false;
+let aiTimer=null, aiEpoch=0;
+function stopAI(){aiEpoch++;clearTimeout(aiTimer);aiTimer=null;}
+function runAI(){
+ clearTimeout(aiTimer);
+ if(!game||game.complete||game.turn===0||overlayOpen)return;
+ const epoch=aiEpoch, current=game;
+ aiTimer=setTimeout(()=>{
+  if(epoch!==aiEpoch||current!==game||overlayOpen||game.complete||game.turn===0)return;
+  const actor=game.turn;
+  try{const a=game.aiDecision(actor);game.act(actor,a.type,a.amount)}
+  catch(error){console.warn('AI action fallback',error);try{const L=game.legal(actor);game.act(actor,L?.canCheck?'check':L?.canCall?'call':'fold')}catch(inner){console.error(inner);toast(inner.message);return}}
+  renderPlay();runAI();
+ },570+Math.floor(Math.random()*320));
+}
+
 let game=null,sessionStart=Date.now(),sessionHand=0,baseBB=100,lastLevel=0,sessionMode='MTT',lastRecorded='',scenarioIndex=0,selectedHand='AA',overlayOpen=false,raiseSet=false,quiz=null,sessionFieldStart=9,sessionFieldLeft=9,sessionPaid=1;
 const focusHands=['A9s','KJo','77','QTs','JJ','A5s','KQs','T9s','AQo','88','AJo','66','KTs','ATs','JTs','99','KQo','55'];
 const SCENARIOS=[
@@ -37,16 +52,17 @@ function getBlindLevel(){if(sessionMode!=='MTT')return 0;let interval=Math.max(1
 function bbForLevel(level){const schedule=[100,150,200,300,400,600,800,1200,1600,2400,3200,4800,6400,9600,12800,19200];if(level<schedule.length)return schedule[level];return Math.round(schedule.at(-1)*Math.pow(1.5,level-schedule.length+1)/100)*100;}
 function startSession(){
  try{
-  raiseExpanded=false;sessionStart=Date.now();sessionHand=0;lastRecorded='';overlayOpen=false;$('learningOverlay').hidden=true;
-  sessionMode=choice('playMode');sessionFieldStart=sessionMode==='MTT'?Math.max(num(choice('fieldSize'),54),num(choice('tableSize'),9)):num(choice('tableSize'),9);sessionFieldLeft=sessionFieldStart;sessionPaid=Math.max(1,Math.floor(sessionFieldStart*.15));const scenario=choice('playType')==='scenario'?scenarioForSettings():null;
-  const n=clamp(num(choice('tableSize'),9),2,9),stack=scenario?scenario.stack:num(choice('stackBB'),40),hero=scenario?scenario.hero:choice('heroPosition');
+  stopAI();raiseExpanded=false;sessionStart=Date.now();sessionHand=0;lastRecorded='';overlayOpen=false;$('learningOverlay').hidden=true;
+  sessionMode=choice('playMode');sessionFieldStart=sessionMode==='MTT'?Math.max(num(choice('fieldSize'),54),num(choice('tableSize'),6)):num(choice('tableSize'),6);sessionFieldLeft=sessionFieldStart;sessionPaid=Math.max(1,Math.floor(sessionFieldStart*.15));const scenario=choice('playType')==='scenario'?scenarioForSettings():null;
+  const n=clamp(num(choice('tableSize'),6),6,6),stack=scenario?scenario.stack:num(choice('stackBB'),40),hero=scenario?scenario.hero:choice('heroPosition');
+  $('advancedSettings').open=false;
   baseBB=100;lastLevel=0;game=new PokerEngine({players:n,mode:sessionMode,stackBB:stack,bb:100,ante:sessionMode==='CASH'?'none':choice('anteMode'),heroPosition:hero,aiMode:choice('aiMode'),adaptive:true,forcedHero:getHeroPreset(scenario),forcedBoard:scenario?.board});
-  game.autoUntilHero();renderPlay();
-  toast('新しいセッションを開始しました');
+  renderPlay();runAI();
  }catch(e){console.error(e);toast('開始エラー: '+e.message)}
 }
 function nextHand(){
  try{
+  stopAI();
   if(!game)return startSession();
   if(choice('playType')==='scenario'){
    const available=SCENARIOS.map((s,i)=>({...s,i})).filter(s=>s.mode===sessionMode);
@@ -58,17 +74,31 @@ function nextHand(){
   sessionHand++;if(sessionMode==='MTT'&&sessionFieldLeft>game.alive().length){let other=sessionFieldLeft-game.alive().length;let knocked=Math.max(0,Math.round(other*(.025+Math.random()*.055)));sessionFieldLeft=Math.max(game.alive().length,sessionFieldLeft-knocked);}lastLevel=getBlindLevel();const newBB=bbForLevel(lastLevel);game.bb=newBB;game.sb=Math.floor(newBB/2);game.heroMemory=game.getHeroMemory();
   if(choice('dealMode')==='focus')game.button=game.nextLiving(game.button);
   if(choice('dealMode')==='focus')game.startHand({forcedHero:getHeroPreset()});else game.nextHand();
-  game.autoUntilHero();raiseSet=false;raiseExpanded=false;renderPlay();
+  raiseSet=false;raiseExpanded=false;renderPlay();runAI();
  }catch(e){console.error(e);toast('次ハンドエラー: '+e.message)}
 }
 function cardHtml(c){if(!c)return '<div class="playing-card back">♠</div>';const suit={s:'♠',h:'♥',d:'♦',c:'♣'}[c[1]];return `<div class="playing-card ${c[1]==='h'||c[1]==='d'?'red':''}"><span>${esc(c[0])}</span><span class="suit">${suit}</span></div>`;}
 function lastAction(idx){let line=[...game.log].reverse().find(x=>x.player===idx);return line?line.text.split('·').slice(-1).join('·').trim():'';}
-function renderSeats(){const n=game.players.length,heroIndex=0;const html=game.players.map((p,i)=>{let theta=Math.PI/2+2*Math.PI*i/n,x=50+45*Math.cos(theta),y=50+43*Math.sin(theta);let status=p.folded?'folded':p.stack===0&&!p.allIn?'out':'';if(p.allIn)status+=' allined';let active=game.turn===i&&!game.complete;return `<div class="seat ${i===heroIndex?'hero':''} ${active?'turn':''} ${status}" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" title="${esc(game.posOf(i))}"><div class="seat-name">${i===0?'YOU':esc(p.name)} ${game.button===i?'●':''}</div><div class="seat-position">${esc(game.posOf(i))}</div><div class="seat-stack">${pretty(p.stack/game.bb)} BB</div><div class="seat-action">${p.allIn?'ALL-IN':p.folded?'FOLD':esc(lastAction(i)).slice(0,12)}</div>${p.bet?`<div class="seat-bet">${pretty(p.bet/game.bb)} BB</div>`:''}</div>`}).join('');$('seats').innerHTML=html;}
+function renderSeats(){
+ const n=game.players.length;
+ const html=game.players.map((p,i)=>{
+  // The hero always appears at six o'clock. Seats follow actual clockwise engine order.
+  const theta=Math.PI/2+2*Math.PI*i/n;
+  const x=50+49*Math.cos(theta),y=50+46*Math.sin(theta);
+  const pos=game.posOf(i),status=[p.folded?'folded':'',p.stack===0&&!p.allIn?'out':'',p.allIn?'allined':'',game.turn===i&&!game.complete?'turn':''].join(' ');
+  const atShowdown=game.complete&&game.result?.type==='showdown'&&!p.folded;
+  const cards=i===0?'':`<div class="opponent-cards">${atShowdown?p.hole.map(c=>cardHtml(c)).join(''):'<div class="mini-card back">♠</div><div class="mini-card back">♠</div>'}</div>`;
+  const action=p.allIn?'ALL-IN':p.folded?'FOLD':lastAction(i);
+  return `<div class="seat ${i===0?'hero':''} ${status}" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" title="${esc(pos)}"><div class="seat-top"><span class="seat-position">${esc(pos)}</span>${game.button===i?'<span class="dealer-chip">D</span>':''}</div>${cards}<div class="seat-name">${i===0?'YOU':esc(p.name)}</div><div class="seat-stack">${pretty(p.stack/game.bb)} BB</div><div class="seat-action">${esc(action)}</div>${p.bet?`<div class="seat-bet">${pretty(p.bet/game.bb)} BB</div>`:''}</div>`;
+ }).join('');
+ $('seats').innerHTML=html;
+}
 function renderPlay(){if(!game)return;const hero=game.players[0],street=game.street;renderSeats();
- $('handHead').innerHTML=`<strong>HAND #${game.handNo}</strong><small>${esc(game.mode)} · ${game.liveOrder().length}max · ${esc(choice('playType')==='scenario'?'固定スポット':'状況対応')} · ${pretty(game.bb)}チップ/BB</small>`;
+ $('handHead').innerHTML=`<strong>HAND #${game.handNo}</strong><small>${esc(game.mode)} · 6max · ${pretty(game.bb)}チップ/BB</small>`;
  $('streetPills').innerHTML=STREET_NAMES.map((s,i)=>`<span class="${street===i?'on':''}">${s}</span>`).join('');
- $('tableStatus').innerHTML=game.mode==='MTT'?`LEVEL ${getBlindLevel()+1}<br>残り約${sessionFieldLeft}/${sessionFieldStart}人<br>入賞${sessionPaid}人（他卓推定）`:'CASH · 連続ハンド練習';
+ $('tableStatus').textContent=game.mode==='MTT'?`LV.${getBlindLevel()+1} · ${sessionFieldLeft}/${sessionFieldStart}人（推定）`:'CASH';
  $('potDisplay').textContent=pretty(game.pot()/game.bb)+' BB';
+ $('liveAction').textContent=game.complete?'ハンド終了':game.turn===0?'YOUR TURN':game.turn>=0?`${game.players[game.turn].name} · THINKING`:'';
  $('boardCards').innerHTML=Array.from({length:5},(_,i)=>game.board[i]?cardHtml(game.board[i]):'<div class="playing-card back placeholder">♠</div>').join('');
  $('heroMeta').textContent='YOU · '+game.posOf(0)+' · '+holeToLabel(hero.hole);
  $('heroCards').innerHTML=hero.hole.map(cardHtml).join('');
@@ -77,7 +107,7 @@ function renderPlay(){if(!game)return;const hero=game.players[0],street=game.str
  $('actionHistory').innerHTML=game.log.slice(-32).reverse().map(line=>`<div class="${line.player===0?'hero-line':''}"><small class="muted">${STREET_NAMES[line.street]||''}</small> ${esc(line.text)}</div>`).join('');
  $('historyCount').textContent=game.log.length+' 件';$('reviewPanel').hidden=!game.complete;$('actionPanel').hidden=game.complete;
  if(game.complete){recordHand();renderReview();return}
- if(game.turn!==0){$('actionPrompt').textContent='相手のアクションを処理中';$('basicActions').innerHTML='';$('raiseControls').hidden=true;return;}
+ if(game.turn!==0){$('actionPrompt').textContent=game.turn>=0?game.players[game.turn].name+' のアクション待ち':'相手のアクションを処理中';$('basicActions').innerHTML='<div class="ai-waiting">● テーブル進行中 · 1人ずつプレーしています</div>';$('raiseToggle').hidden=true;$('raiseControls').hidden=true;$('actionPanel').classList.remove('raise-open');return;}
  renderActions();
 }
 function renderActions(){const legal=game.legal(0),hero=game.players[0];if(!legal)return;
@@ -109,7 +139,7 @@ function takeHeroAction(type,amount){
   if(!game||game.complete||game.turn!==0||overlayOpen)return;
   game.act(0,type,amount);raiseExpanded=false;const decision=game.decisions.at(-1);raiseSet=false;
   if(choice('feedbackMode')==='instant'&&decision){overlayOpen=true;showLearning(decision);renderPlay();return;}
-  game.autoUntilHero();renderPlay();
+  renderPlay();runAI();
  }catch(e){console.error(e);toast(e.message)}
 }
 function theoryForDecision(d){
@@ -129,7 +159,7 @@ function showLearning(d){
  $('resumeHand').textContent=game.complete?'ハンド結果を見る →':'プレーを続ける →';
  $('learningOverlay').hidden=false;
 }
-$('resumeHand').onclick=()=>{overlayOpen=false;$('learningOverlay').hidden=true;try{if(!game.complete)game.autoUntilHero();renderPlay()}catch(e){toast(e.message)}};
+$('resumeHand').onclick=()=>{overlayOpen=false;$('learningOverlay').hidden=true;renderPlay();runAI();};
 function recordHand(){if(!game||!game.complete)return;let id=sessionStart+'-'+game.handNo;if(lastRecorded===id)return;lastRecorded=id;let h=game.players[0],net=h.stack-game.heroDealtStack;let row={id,date:new Date().toISOString(),mode:game.mode,hand:holeToLabel(h.hole),cards:h.hole.slice(),board:game.board.slice(),net,bb:game.bb,handNo:game.handNo,decisions:game.decisions.slice(),result:game.result?.type||'unknown',ai:game.aiMode};store.history.unshift(row);store.history=store.history.slice(0,300);save();}
 function renderReview(){const result=game.result,hero=game.players[0],net=hero.stack-game.heroDealtStack;let resultLine=net>=0?`+${pretty(net/game.bb)} BB`:`${pretty(net/game.bb)} BB`;
  let showdownText='';if(result?.type==='showdown'){const shown=game.inHand().map(p=>`<div>${esc(p.name)} ${esc(formatHand(p.hole))} · ${esc(HAND_NAMES[result.ranks[p.id]?.[0]]||'—')}</div>`).join('');showdownText=`<div class="result-cards">${shown}</div>`;}
@@ -137,12 +167,12 @@ function renderReview(){const result=game.result,hero=game.players[0],net=hero.s
  $('decisionReview').innerHTML=game.decisions.length?game.decisions.map((d,i)=>{const t=theoryForDecision(d);return `<div class="review-item"><h3>${i+1}. ${STREET_NAMES[d.street]} · ${esc(t.hand)} · ${esc(d.action.toUpperCase())}</h3><p>ポット ${pretty(t.pot)}BB / 必要勝率 ${t.odds} / 自分の位置 ${esc(d.position)}</p>${t.lines.map(l=>`<p>・${esc(l)}</p>`).join('')}<span class="review-status">THEORY BASED / 未採点</span></div>`}).join(''):'<p class="muted">あなたの判断順が来る前にハンドが終了しました。</p>';
 }
 $('newSession').onclick=()=>{if(game&&!game.complete&&!confirm('現在のハンドを破棄して新しいセッションを始めますか？'))return;startSession();};$('applySettings').onclick=()=>{if(game&&!game.complete&&!confirm('現在のハンドを破棄して設定を反映しますか？'))return;startSession();};$('nextHand').onclick=nextHand;
-$('playMode').onchange=()=>{fillScenarios();if(choice('playMode')==='CASH')$('anteMode').value='none'};
+$('playMode').onchange=()=>{fillScenarios();if(choice('playMode')==='CASH'){$('anteMode').value='none';if(num(choice('stackBB'))<100)$('stackBB').value='100'}else if(num(choice('stackBB'))>=100)$('stackBB').value='40'};
 $('scenarioSelect').onchange=()=>{scenarioIndex=num(choice('scenarioSelect'))};
 $('playType').onchange=()=>{if(choice('playType')==='scenario')$('advancedSettings').open=true;toast('新しいセッション開始で設定を反映します')};
 
 // RANGE LIBRARY
-const positions=['UTG','UTG+1','MP','LJ','HJ','CO','BTN','SB','BB'];
+const positions=['UTG','HJ','CO','BTN','SB','BB'];
 let selectedRangeContext=null,selectedRangeImport=null;
 function rangeContext(){return {format:choice('rangeFormat'),table:choice('rangeTable'),stack:choice('rangeStack'),hero:choice('rangeHero'),spot:choice('rangeSpot'),opener:choice('rangeOpener'),openSize:choice('rangeOpenSize'),ante:choice('rangeAnte')}}
 function initRangeControls(){for(const id of ['rangeHero','rangeOpener'])$(id).innerHTML=positions.map(s=>`<option value="${s}">${s}</option>`).join('');$('rangeHero').value='BTN';$('rangeOpener').value='CO';for(const id of ['rangeFormat','rangeTable','rangeStack','rangeHero','rangeSpot','rangeOpener','rangeOpenSize','rangeAnte'])$(id).addEventListener('change',renderRanges)}
@@ -185,5 +215,5 @@ $('importSolver').onchange=async e=>{try{let doc=await readJsonFile(e.target);if
 $('clearAll').onclick=()=>{if(!confirm('保存したハンド履歴・問題成績・取り込みレンジを全削除します。元に戻せません。実行しますか？'))return;store={history:[],solvers:{},quiz:{right:0,total:0}};save();renderData();makeQuiz();toast('端末内のデータを削除しました')};
 function renderData(){$('solverCount').textContent=`登録済み：${Object.keys(store.solvers).length}スポット · ${store.history.length}ハンド記録`;}
 
-function init(){fillScenarios();initRangeControls();setupICM();makeQuiz();renderRanges();renderData();startSession();if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js?v=100').catch(e=>console.warn('SW',e)));}window.addEventListener('online',()=>{$('connectionStatus').textContent='ONLINE'});window.addEventListener('offline',()=>{$('connectionStatus').textContent='OFFLINE'});$('connectionStatus').textContent=navigator.onLine?'ONLINE':'OFFLINE';}
+function init(){fillScenarios();initRangeControls();setupICM();makeQuiz();renderRanges();renderData();startSession();if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js?v=102').catch(e=>console.warn('SW',e)));}window.addEventListener('online',()=>{$('connectionStatus').textContent='ONLINE'});window.addEventListener('offline',()=>{$('connectionStatus').textContent='OFFLINE'});$('connectionStatus').textContent=navigator.onLine?'ONLINE':'OFFLINE';}
 init();
