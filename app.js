@@ -1,5 +1,5 @@
-import {PokerEngine,STREET_NAMES,formatHand,HAND_NAMES,eval7,icmEquities,icmBubbleFactor,randomInt} from './engine.js?v=41';
-import {ROW_RANKS,SPOT_LABELS,handAt,holeToLabel,keyForRange,roughRangeClass,explainHand,exampleSchema,validateImportedSpot} from './ranges.js?v=41';
+import {PokerEngine,STREET_NAMES,formatHand,HAND_NAMES,eval7,icmEquities,icmBubbleFactor,randomInt} from './engine.js?v=100';
+import {ROW_RANKS,SPOT_LABELS,handAt,holeToLabel,keyForRange,roughRangeClass,explainHand,exampleSchema,validateImportedSpot} from './ranges.js?v=100';
 
 const $=id=>document.getElementById(id),num=(x,d=0)=>Number.isFinite(Number(x))?Number(x):d;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -10,6 +10,7 @@ const STORE='poker-lab-v04-local';
 let store={history:[],solvers:{},quiz:{right:0,total:0}};
 try{let saved=JSON.parse(localStorage.getItem(STORE)||'null');if(saved&&typeof saved==='object'){store={history:Array.isArray(saved.history)?saved.history:[],solvers:saved.solvers&&typeof saved.solvers==='object'?saved.solvers:{},quiz:saved.quiz&&typeof saved.quiz==='object'?saved.quiz:{right:0,total:0}}}}catch(e){console.warn('Storage not accessible',e)}
 function save(){try{localStorage.setItem(STORE,JSON.stringify(store))}catch(e){toast('端末への保存ができませんでした。空き容量や設定を確認してください。')}}
+let raiseExpanded=false;
 let game=null,sessionStart=Date.now(),sessionHand=0,baseBB=100,lastLevel=0,sessionMode='MTT',lastRecorded='',scenarioIndex=0,selectedHand='AA',overlayOpen=false,raiseSet=false,quiz=null,sessionFieldStart=9,sessionFieldLeft=9,sessionPaid=1;
 const focusHands=['A9s','KJo','77','QTs','JJ','A5s','KQs','T9s','AQo','88','AJo','66','KTs','ATs','JTs','99','KQo','55'];
 const SCENARIOS=[
@@ -36,7 +37,7 @@ function getBlindLevel(){if(sessionMode!=='MTT')return 0;let interval=Math.max(1
 function bbForLevel(level){const schedule=[100,150,200,300,400,600,800,1200,1600,2400,3200,4800,6400,9600,12800,19200];if(level<schedule.length)return schedule[level];return Math.round(schedule.at(-1)*Math.pow(1.5,level-schedule.length+1)/100)*100;}
 function startSession(){
  try{
-  sessionStart=Date.now();sessionHand=0;lastRecorded='';overlayOpen=false;$('learningOverlay').hidden=true;
+  raiseExpanded=false;sessionStart=Date.now();sessionHand=0;lastRecorded='';overlayOpen=false;$('learningOverlay').hidden=true;
   sessionMode=choice('playMode');sessionFieldStart=sessionMode==='MTT'?Math.max(num(choice('fieldSize'),54),num(choice('tableSize'),9)):num(choice('tableSize'),9);sessionFieldLeft=sessionFieldStart;sessionPaid=Math.max(1,Math.floor(sessionFieldStart*.15));const scenario=choice('playType')==='scenario'?scenarioForSettings():null;
   const n=clamp(num(choice('tableSize'),9),2,9),stack=scenario?scenario.stack:num(choice('stackBB'),40),hero=scenario?scenario.hero:choice('heroPosition');
   baseBB=100;lastLevel=0;game=new PokerEngine({players:n,mode:sessionMode,stackBB:stack,bb:100,ante:sessionMode==='CASH'?'none':choice('anteMode'),heroPosition:hero,aiMode:choice('aiMode'),adaptive:true,forcedHero:getHeroPreset(scenario),forcedBoard:scenario?.board});
@@ -57,12 +58,12 @@ function nextHand(){
   sessionHand++;if(sessionMode==='MTT'&&sessionFieldLeft>game.alive().length){let other=sessionFieldLeft-game.alive().length;let knocked=Math.max(0,Math.round(other*(.025+Math.random()*.055)));sessionFieldLeft=Math.max(game.alive().length,sessionFieldLeft-knocked);}lastLevel=getBlindLevel();const newBB=bbForLevel(lastLevel);game.bb=newBB;game.sb=Math.floor(newBB/2);game.heroMemory=game.getHeroMemory();
   if(choice('dealMode')==='focus')game.button=game.nextLiving(game.button);
   if(choice('dealMode')==='focus')game.startHand({forcedHero:getHeroPreset()});else game.nextHand();
-  game.autoUntilHero();raiseSet=false;renderPlay();
+  game.autoUntilHero();raiseSet=false;raiseExpanded=false;renderPlay();
  }catch(e){console.error(e);toast('次ハンドエラー: '+e.message)}
 }
 function cardHtml(c){if(!c)return '<div class="playing-card back">♠</div>';const suit={s:'♠',h:'♥',d:'♦',c:'♣'}[c[1]];return `<div class="playing-card ${c[1]==='h'||c[1]==='d'?'red':''}"><span>${esc(c[0])}</span><span class="suit">${suit}</span></div>`;}
 function lastAction(idx){let line=[...game.log].reverse().find(x=>x.player===idx);return line?line.text.split('·').slice(-1).join('·').trim():'';}
-function renderSeats(){const n=game.players.length,heroIndex=0;const html=game.players.map((p,i)=>{let theta=Math.PI/2+2*Math.PI*i/n,x=50+47*Math.cos(theta),y=49+50*Math.sin(theta);let status=p.folded?'folded':p.stack===0&&!p.allIn?'out':'';if(p.allIn)status+=' allined';let active=game.turn===i&&!game.complete;return `<div class="seat ${i===heroIndex?'hero':''} ${active?'turn':''} ${status}" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" title="${esc(game.posOf(i))}"><div class="seat-name">${i===0?'YOU':esc(p.name)} ${game.button===i?'●':''}</div><div class="seat-position">${esc(game.posOf(i))}</div><div class="seat-stack">${pretty(p.stack/game.bb)} BB</div><div class="seat-action">${p.allIn?'ALL-IN':p.folded?'FOLD':esc(lastAction(i)).slice(0,12)}</div>${p.bet?`<div class="seat-bet">${pretty(p.bet/game.bb)} BB</div>`:''}</div>`}).join('');$('seats').innerHTML=html;}
+function renderSeats(){const n=game.players.length,heroIndex=0;const html=game.players.map((p,i)=>{let theta=Math.PI/2+2*Math.PI*i/n,x=50+45*Math.cos(theta),y=50+43*Math.sin(theta);let status=p.folded?'folded':p.stack===0&&!p.allIn?'out':'';if(p.allIn)status+=' allined';let active=game.turn===i&&!game.complete;return `<div class="seat ${i===heroIndex?'hero':''} ${active?'turn':''} ${status}" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" title="${esc(game.posOf(i))}"><div class="seat-name">${i===0?'YOU':esc(p.name)} ${game.button===i?'●':''}</div><div class="seat-position">${esc(game.posOf(i))}</div><div class="seat-stack">${pretty(p.stack/game.bb)} BB</div><div class="seat-action">${p.allIn?'ALL-IN':p.folded?'FOLD':esc(lastAction(i)).slice(0,12)}</div>${p.bet?`<div class="seat-bet">${pretty(p.bet/game.bb)} BB</div>`:''}</div>`}).join('');$('seats').innerHTML=html;}
 function renderPlay(){if(!game)return;const hero=game.players[0],street=game.street;renderSeats();
  $('handHead').innerHTML=`<strong>HAND #${game.handNo}</strong><small>${esc(game.mode)} · ${game.liveOrder().length}max · ${esc(choice('playType')==='scenario'?'固定スポット':'状況対応')} · ${pretty(game.bb)}チップ/BB</small>`;
  $('streetPills').innerHTML=STREET_NAMES.map((s,i)=>`<span class="${street===i?'on':''}">${s}</span>`).join('');
@@ -85,7 +86,7 @@ function renderActions(){const legal=game.legal(0),hero=game.players[0];if(!lega
  const options=[];if(legal.canFold)options.push({label:'FOLD',class:'fold-button',action:'fold'});if(legal.canCheck)options.push({label:'CHECK',class:'call-button',action:'check'});if(legal.canCall)options.push({label:legal.callAmount===hero.stack?'CALL ALL-IN':'CALL '+pretty(legal.callAmount/game.bb)+' BB',class:'call-button',action:'call'});
  $('basicActions').innerHTML=options.map((x,i)=>`<button class="btn ${x.class}" data-action="${x.action}">${x.label}</button>`).join('');
  $('basicActions').querySelectorAll('button').forEach(b=>b.onclick=()=>takeHeroAction(b.dataset.action));
- $('raiseControls').hidden=!legal.canRaise;
+ $('raiseToggle').hidden=!legal.canRaise; $('raiseControls').hidden=!legal.canRaise||!raiseExpanded; $('actionPanel').classList.toggle('raise-open',legal.canRaise&&raiseExpanded);
  if(legal.canRaise){let min=legal.minRaiseTo,max=legal.maxRaiseTo,step=Math.max(1,Math.floor(game.bb/10));
   $('raiseSlider').min=min;$('raiseSlider').max=max;$('raiseSlider').step=1;$('raiseAmount').min=(min/game.bb).toFixed(2);$('raiseAmount').max=(max/game.bb).toFixed(2);$('raiseAmount').step='0.1';
   if(!raiseSet||num($('raiseAmount').value)*game.bb<min||num($('raiseAmount').value)*game.bb>max){let initial=Math.min(max,Math.max(min,Math.round((game.currentBet+(game.street===0?game.bb*1.2:game.pot()*.5))/step)*step));$('raiseAmount').value=(initial/game.bb).toFixed(1);raiseSet=true;}
@@ -102,10 +103,11 @@ function updateRaiseText(){if(!game)return;$('raiseValue').textContent=pretty(nu
 $('raiseSlider').oninput=e=>{raiseSet=true;setRaise(num(e.target.value))};$('raiseAmount').oninput=()=>{raiseSet=true;updateRaiseText()};
 $('raiseSubmit').onclick=()=>{const L=game.legal(0),v=Math.round(num($('raiseAmount').value,-1)*game.bb);if(!L)return;if(v<L.minRaiseTo||v>L.maxRaiseTo){toast(`レイズ額は ${pretty(L.minRaiseTo/game.bb)}〜${pretty(L.maxRaiseTo/game.bb)} BB`);return;}takeHeroAction('raise',v)};
 $('allInButton').onclick=()=>takeHeroAction('allin');
+$('raiseToggle').onclick=()=>{raiseExpanded=!raiseExpanded;renderActions();};
 function takeHeroAction(type,amount){
  try{
   if(!game||game.complete||game.turn!==0||overlayOpen)return;
-  game.act(0,type,amount);const decision=game.decisions.at(-1);raiseSet=false;
+  game.act(0,type,amount);raiseExpanded=false;const decision=game.decisions.at(-1);raiseSet=false;
   if(choice('feedbackMode')==='instant'&&decision){overlayOpen=true;showLearning(decision);renderPlay();return;}
   game.autoUntilHero();renderPlay();
  }catch(e){console.error(e);toast(e.message)}
@@ -183,5 +185,5 @@ $('importSolver').onchange=async e=>{try{let doc=await readJsonFile(e.target);if
 $('clearAll').onclick=()=>{if(!confirm('保存したハンド履歴・問題成績・取り込みレンジを全削除します。元に戻せません。実行しますか？'))return;store={history:[],solvers:{},quiz:{right:0,total:0}};save();renderData();makeQuiz();toast('端末内のデータを削除しました')};
 function renderData(){$('solverCount').textContent=`登録済み：${Object.keys(store.solvers).length}スポット · ${store.history.length}ハンド記録`;}
 
-function init(){fillScenarios();initRangeControls();setupICM();makeQuiz();renderRanges();renderData();startSession();if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js?v=41').catch(e=>console.warn('SW',e)));}window.addEventListener('online',()=>{$('connectionStatus').textContent='ONLINE'});window.addEventListener('offline',()=>{$('connectionStatus').textContent='OFFLINE'});$('connectionStatus').textContent=navigator.onLine?'ONLINE':'OFFLINE';}
+function init(){fillScenarios();initRangeControls();setupICM();makeQuiz();renderRanges();renderData();startSession();if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js?v=100').catch(e=>console.warn('SW',e)));}window.addEventListener('online',()=>{$('connectionStatus').textContent='ONLINE'});window.addEventListener('offline',()=>{$('connectionStatus').textContent='OFFLINE'});$('connectionStatus').textContent=navigator.onLine?'ONLINE':'OFFLINE';}
 init();
