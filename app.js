@@ -83,8 +83,9 @@ function renderSeats(){
  const n=game.players.length;
  const html=game.players.map((p,i)=>{
   // The hero always appears at six o'clock. Seats follow actual clockwise engine order.
-  const theta=Math.PI/2+2*Math.PI*i/n;
-  const x=50+49*Math.cos(theta),y=50+46*Math.sin(theta);
+  // Six deliberately spaced seats: keep the board and pot clear.
+  const seatXY=[[50,99],[1,77],[1,23],[50,2],[99,23],[99,77]];
+  const [x,y]=seatXY[i];
   const pos=game.posOf(i),status=[p.folded?'folded':'',p.stack===0&&!p.allIn?'out':'',p.allIn?'allined':'',game.turn===i&&!game.complete?'turn':''].join(' ');
   const atShowdown=game.complete&&game.result?.type==='showdown'&&!p.folded;
   const cards=i===0?'':`<div class="opponent-cards">${atShowdown?p.hole.map(c=>cardHtml(c)).join(''):'<div class="mini-card back">♠</div><div class="mini-card back">♠</div>'}</div>`;

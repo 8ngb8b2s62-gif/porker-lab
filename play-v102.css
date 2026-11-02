@@ -92,3 +92,20 @@
  #screen-play:has(#advancedSettings[open]) .action-panel{margin-bottom:10px!important}
  #screen-play .raise-toggle[hidden],#screen-play .raise-controls[hidden]{display:none!important}
 }
+
+/* v1.0.3: no player cards or labels on top of the central pot/board. */
+@media(max-width:700px){
+ #screen-play .seat{width:62px!important;min-width:62px!important;max-width:62px!important;padding:2px 2px 3px!important}
+ #screen-play .seat-top{min-height:10px}
+ #screen-play .seat-name{font-size:9px!important}
+ #screen-play .seat-position{font-size:8px!important}
+ #screen-play .seat-stack{font-size:9px!important}
+ #screen-play .seat-action{font-size:7px!important;min-height:8px}
+ #screen-play .opponent-cards{height:23px;margin:1px 0}
+ #screen-play .mini-card{height:23px;width:17px;font-size:10px}
+ #screen-play .opponent-cards .playing-card{height:23px;width:17px;font-size:10px}
+ #screen-play .center-mat{top:49%!important;width:76%!important}
+ #screen-play .board{gap:2px}
+ #screen-play .board .playing-card{width:clamp(23px,6.6vw,30px);height:clamp(33px,9vw,42px)}
+ #screen-play .poker-table{width:min(75vw,326px)!important}
+}
